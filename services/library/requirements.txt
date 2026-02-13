@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+minio
+python-multipart
+requests
+sqlalchemy
+psycopg2-binary

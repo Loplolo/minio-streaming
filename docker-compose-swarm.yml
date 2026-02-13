@@ -1,0 +1,132 @@
+
+services:
+  minio1:
+    image: minio/minio 
+    hostname: minio1
+    # Start MinIO in distributed mode, data is stored in /data
+    command: server http://minio{1...4}/data --console-address ":9001" 
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio1_data:/data
+    networks:
+      - music_net
+    deploy:
+      restart_policy:
+        condition: on-failure
+
+  minio2:
+    image: minio/minio
+    hostname: minio2
+    command: server http://minio{1...4}/data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio2_data:/data
+    networks:
+      - music_net
+
+  minio3:
+    image: minio/minio
+    hostname: minio3
+    command: server http://minio{1...4}/data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio3_data:/data
+    networks:
+      - music_net
+
+  minio4:
+    image: minio/minio
+    hostname: minio4
+    command: server http://minio{1...4}/data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio4_data:/data
+    networks:
+      - music_net
+
+  nginx:
+    image: nginx:latest
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "9000:9000" 
+    depends_on:
+      - minio1
+      - minio2
+      - minio3
+      - minio4
+    networks:
+      - music_net
+
+  db:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - music_net
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+
+  library:
+    image: music-library:latest
+    build: ./services/library
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    networks:
+      - music_net
+    deploy:
+      replicas: 1
+
+  storage:
+    image: music-uploader:latest
+    build: ./services/storage
+    ports:
+      - "8001:8000"
+    environment:
+      - MINIO_ENDPOINT=nginx:9000 
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
+      - BUCKET_NAME=${MINIO_DEFAULT_BUCKET}
+      - LIBRARY_API_URL=http://library:8000/songs/
+    networks:
+      - music_net
+
+  streaming:
+    image: music-streamer:latest
+    build: ./services/streaming
+    ports:
+      - "8002:8000"
+    environment:
+      - MINIO_ENDPOINT=nginx:9000 
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
+      - BUCKET_NAME=${MINIO_DEFAULT_BUCKET}
+      - LIBRARY_API_URL=http://library:8000/songs/
+    networks:
+      - music_net
+    deploy:
+      replicas: 2
+
+volumes:
+  minio1_data:
+  minio2_data:
+  minio3_data:
+  minio4_data:
+  postgres_data:
+
+networks:
+  music_net:
+    driver: overlay 
