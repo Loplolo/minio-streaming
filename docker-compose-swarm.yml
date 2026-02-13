@@ -3,7 +3,6 @@ services:
   minio1:
     image: minio/minio 
     hostname: minio1
-    # Start MinIO in distributed mode, data is stored in /data
     command: server http://minio{1...4}/data --console-address ":9001" 
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
